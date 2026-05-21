@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Manager 📝</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>📝 Task Manager</h1>
+        <p class="subtitle">Un petit projet pour apprendre GitHub</p>
+        
+        <div class="input-section">
+            <input 
+                type="text" 
+                id="taskInput" 
+                placeholder="Ajouter une nouvelle tâche..." 
+                onkeypress="if(event.key === 'Enter') addTask()"
+            >
+            <button onclick="addTask()">➕ Ajouter</button>
+        </div>
+
+        <div class="stats">
+            <span>Total: <strong id="totalTasks">0</strong></span>
+            <span>Complétées: <strong id="completedTasks">0</strong></span>
+        </div>
+
+        <div class="task-filters">
+            <button class="filter-btn active" onclick="filterTasks('all')">Toutes</button>
+            <button class="filter-btn" onclick="filterTasks('active')">À faire</button>
+            <button class="filter-btn" onclick="filterTasks('completed')">Complétées</button>
+        </div>
+
+        <div class="tasks-container" id="tasksList">
+            <!-- Les tâches s'affichent ici -->
+        </div>
+    </div>
+
+    <script>
+        let currentFilter = 'all';
+
+        async function loadTasks() {
+            const response = await fetch('/api/tasks');
+            const tasks = await response.json();
+            displayTasks(tasks);
+        }
+
+        function displayTasks(tasks) {
+            const tasksList = document.getElementById('tasksList');
+            tasksList.innerHTML = '';
+
+            let filteredTasks = tasks;
+            if (currentFilter === 'active') {
+                filteredTasks = tasks.filter(t => !t.completed);
+            } else if (currentFilter === 'completed') {
+                filteredTasks = tasks.filter(t => t.completed);
+            }
+
+            if (filteredTasks.length === 0) {
+                tasksList.innerHTML = '<p class="empty-state">Aucune tâche à afficher 🎉</p>';
+            } else {
+                filteredTasks.forEach(task => {
+                    const taskEl = document.createElement('div');
+                    taskEl.className = `task-item ${task.completed ? 'completed' : ''}`;
+                    taskEl.innerHTML = `
+                        <input 
+                            type="checkbox" 
+                            ${task.completed ? 'checked' : ''} 
+                            onchange="toggleTask(${task.id})"
+                        >
+                        <span class="task-title">${task.title}</span>
+                        <button class="delete-btn" onclick="deleteTask(${task.id})">🗑️</button>
+                    `;
+                    tasksList.appendChild(taskEl);
+                });
+            }
+
+            updateStats(tasks);
+        }
+
+        async function addTask() {
+            const input = document.getElementById('taskInput');
+            if (input.value.trim() === '') return;
+
+            const response = await fetch('/api/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: input.value })
+            });
+
+            if (response.ok) {
+                input.value = '';
+                loadTasks();
+            }
+        }
+
+        async function toggleTask(taskId) {
+            const tasks = await (await fetch('/api/tasks')).json();
+            const task = tasks.find(t => t.id === taskId);
+
+            await fetch(`/api/tasks/${taskId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ completed: !task.completed })
+            });
+
+            loadTasks();
+        }
+
+        async function deleteTask(taskId) {
+            if (confirm('Êtes-vous sûr ?')) {
+                await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+                loadTasks();
+            }
+        }
+
+        function updateStats(tasks) {
+            document.getElementById('totalTasks').textContent = tasks.length;
+            document.getElementById('completedTasks').textContent = tasks.filter(t => t.completed).length;
+        }
+
+        function filterTasks(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            loadTasks();
+        }
+
+        // Charger les tâches au démarrage
+        loadTasks();
+    </script>
+</body>
+</html>
